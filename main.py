@@ -16,39 +16,41 @@ TEXT = "I'm out until Monday. My inbox has 4,312 unread emails and I have read n
 OUT = Path("/output/entry.txt")
 
 
-def check_len(text, lo=1, hi=200):
+EM_DASH = "\u2014"
+
+
+def validate_entry(text, lo=1, hi=200):
+    """Single validation gate for the entry: length, one line, punctuation.
+
+    Consolidates the old check_len + check_single_line into one function
+    so every writer (main, save_line, round-trip re-check) runs the same
+    gate: length bounds, exactly one line (no newline/CR, no leading or
+    trailing whitespace), and the punchline's dash must be the real
+    em-dash U+2014 -- not a hyphen or double hyphen, which would flatten
+    the pause before "please expect the same energy on my return".
+    """
     size = len(text)
     assert lo <= size <= hi, f"entry must be {lo}-{hi} chars, got {size}"
+    assert "\n" not in text and "\r" not in text, "entry must be a single line"
+    assert text == text.strip(), "entry must not start/end with whitespace"
+    assert EM_DASH in text, "entry must keep its em-dash (U+2014)"
+    assert "--" not in text, "entry must not use a double hyphen for the dash"
     return size
 
 
-def check_single_line(text):
-    """Entry must be exactly one line: no newline chars, no trailing space.
-
-    The bounty is a single out-of-office line; a stray newline or trailing
-    space would break the one-line format and change the character count
-    on round-trip. Checked here, and re-checked after the write.
-    """
-    assert "\n" not in text and "\r" not in text, "entry must be a single line"
-    assert text == text.rstrip(), "entry must not end with trailing space"
-    assert text == text.strip(), "entry must not start with whitespace"
-    return text
-
-
 def save_line(path, text):
-    check_single_line(text)
+    validate_entry(text)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as fh:
         fh.write(text)
 
 
 def main():
-    check_len(TEXT)
-    check_single_line(TEXT)
+    validate_entry(TEXT)
     save_line(OUT, TEXT)
     saved = OUT.read_text(encoding="utf-8")
     assert saved == TEXT, "round-trip mismatch"
-    check_single_line(saved)
+    validate_entry(saved)
     print(f"wrote {len(TEXT)} chars to {OUT}")
 
 
